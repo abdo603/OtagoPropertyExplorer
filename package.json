@@ -1,0 +1,14 @@
+{
+  "name": "otago-property-explorer",
+  "version": "17.0.0",
+  "private": true,
+  "description": "Otago GIS property explorer with Sketch/Shapefile overlap percentages, all-side measurements, unified draggable dashboard, CSV/JSON export, and Arabic overlap labels",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "check": "node --check server.js && node --check js/config.js && node --check js/utils.js && node --check js/data-service.js && node --check js/geometry-service.js && node --check js/popup-service.js && node --check js/export-service.js && node --check js/shapefile-loader.js && node --check js/app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

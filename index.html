@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Otago Property Explorer</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.34/esri/themes/light/main.css" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://js.arcgis.com/4.34/"></script>
+
+</head>
+<body>
+  <div id="viewDiv"></div>
+  <aside id="analysisDashboard" class="map-analysis-badge analysis-dashboard draggable-map-badge" hidden aria-live="polite" aria-label="لوحة التحليل المكاني">
+    <div id="analysisDashboardHandle" class="map-analysis-title drag-handle">
+      <span>ملخص التحليل المكاني</span><span class="drag-grip" aria-hidden="true">⠿</span>
+    </div>
+    <nav class="analysis-tabs" aria-label="أقسام ملخص التحليل">
+      <button type="button" class="analysis-tab" data-analysis-tab="selection" aria-selected="false" hidden>القطعة</button>
+      <button type="button" class="analysis-tab" data-analysis-tab="overlap" aria-selected="false" hidden>التقاطع</button>
+      <button type="button" class="analysis-tab" data-analysis-tab="shapefile" aria-selected="false" hidden>Shapefile</button>
+    </nav>
+    <section id="mapAnalysisBadge" class="analysis-tab-pane" hidden aria-label="ملخص القطعة المحددة">
+      <div id="mapAnalysisBody"></div>
+      <div class="map-analysis-legend">
+        <div><span class="legend-dot road"></span> الشارع الأقرب</div>
+        <div><span class="legend-dot distance"></span> أقصر مسافة بين القطعة والشارع</div>
+        <div><span class="legend-dot side"></span> أطول أضلاع Shapefile</div>
+        <div><span class="legend-dot parcel-side"></span> أطول أضلاع القطعة المحددة</div>
+      </div>
+    </section>
+    <section id="geometryAnalysisBadge" class="analysis-tab-pane" hidden aria-label="ملخص نسب التقاطع">
+      <div id="geometryAnalysisTitle" class="analysis-pane-title">ملخص نسب التقاطع</div>
+      <div id="geometryAnalysisBody"></div>
+    </section>
+    <section id="shapefileAnalysisBadge" class="analysis-tab-pane" hidden aria-label="ملخص أضلاع Shapefile">
+      <div class="analysis-pane-title">ملخص أضلاع Shapefile</div>
+      <div id="shapefileAnalysisBody"></div>
+    </section>
+  </aside>
+  <section id="panel">
+    <h1>مستكشف العقارات — Otago</h1>
+    <div style="font-size:11px;color:#64748b">Intersect · Geometry Operators · Shapefile · JSON</div>
+
+    <div class="section-title">1. المنطقة الإدارية (Territorial Authority) — بحث تلقائي</div>
+    <input id="areaInput" type="text" list="areaList" placeholder="ابدأ الكتابة… مثال: Dunedin" autocomplete="off" disabled />
+    <datalist id="areaList"></datalist>
+    <div id="districtInfo"></div>
+    <label for="localitySelect">المحلية / Locality</label>
+    <select id="localitySelect" disabled><option value="">اختر المنطقة أولًا</option></select>
+    <label for="roadSelect">الشارع / Road</label>
+    <select id="roadSelect" disabled><option value="">اختر المحلية أولًا</option></select>
+    <label for="layerSelect">الطبقة المطلوبة</label>
+    <select id="layerSelect">
+      <option value="1">LINZ Primary Parcels (Layer 1)</option>
+      <option value="0">ORC Properties (Layer 0)</option>
+      <option value="both">الاثنتان معًا</option>
+    </select>
+    <label for="bufferInput">نطاق البحث حول الشارع (متر)</label>
+    <input id="bufferInput" type="text" value="25" />
+    <button id="applyRoadBtn" type="button">تحديد الأراضي المتقاطعة مع الشارع</button>
+
+    <div class="section-title">2. رفع Shapefile (ملف ZIP يحتوي shp, dbf, prj)</div>
+    <input id="shpFile" type="file" accept=".zip" disabled />
+    <p class="hint">سيظهر المضلع على الخريطة، وتُحدَّد الأراضي/العقارات التي تتقاطع معه. تظهر أطوال جميع أضلاع Shapefile على الخريطة افتراضيًا. يمكن إخفاء التسميات عند ازدحام الخريطة.</p>
+    <label class="inline-check"><input id="showAllSideLabelsToggle" type="checkbox" checked /> إظهار أطوال جميع أضلاع Shapefile على الخريطة</label>
+
+    <div class="section-title">3. النتائج</div>
+    <select id="resultSelect" disabled><option value="">لا توجد نتائج بعد</option></select>
+    <select id="addressSelect" disabled style="margin-top:8px"><option value="">العناوين داخل الأرض المحددة</option></select>
+    <div id="summary"></div>
+    <div class="row">
+      <button id="resetFiltersBtn" type="button" class="secondary">إعادة ضبط الفلاتر</button>
+      <button id="clearBtn" type="button" class="secondary">مسح التحديد</button>
+    </div>
+    <button id="saveBtn" type="button" disabled>حفظ في النظام + تنزيل JSON</button>
+    <div class="row export-actions">
+      <button id="exportCsvBtn" type="button" class="secondary" disabled>تصدير CSV</button>
+    </div>
+
+    <details class="advanced-tools">
+      <summary>أدوات متقدمة: الأبعاد اليدوية والإحداثيات</summary>
+      <p class="hint">استخدم هذه الأدوات عند الحاجة فقط. الأبعاد اليدوية قيم توثيقية يضيفها المستخدم وليست قياسات محسوبة من الشكل.</p>
+      <div class="section-title">4. إدخال الأبعاد اليدوية للعنصر المحدد</div>
+    <div id="selectedFeatureInfo" class="hint">اختَر قطعة أرض أو خطًا أو نقطة من الخريطة أولًا.</div>
+    <div class="row dimension-input-row">
+      <input id="dimensionNameInput" type="text" placeholder="وصف البعد اليدوي" aria-label="وصف البعد اليدوي" disabled />
+      <input id="dimensionValueInput" type="number" min="0.001" step="any" placeholder="قيمة معروفة بالمتر" aria-label="قيمة معروفة بالمتر" disabled />
+    </div>
+    <button id="addDimensionBtn" type="button" disabled>حفظ البعد اليدوي للعنصر المحدد</button>
+    <div id="manualDimensionsList" class="manual-dimensions"><span class="hint">لا توجد أبعاد يدوية بعد.</span></div>
+
+    <div class="section-title">5. تحويل الإحداثيات الجغرافية إلى مترية</div>
+    <p class="hint">أدخل Longitude وLatitude بنظام WGS84 (EPSG:4326)، ثم حوّلهما إلى Easting وNorthing بالأمتار (EPSG:2193).</p>
+    <div class="row">
+      <input id="longitudeInput" type="number" step="any" min="-180" max="180" placeholder="Longitude / خط الطول" aria-label="Longitude" />
+      <input id="latitudeInput" type="number" step="any" min="-90" max="90" placeholder="Latitude / خط العرض" aria-label="Latitude" />
+    </div>
+    <button id="convertCoordinatesBtn" type="button" class="secondary">تحويل إلى إحداثيات مترية</button>
+    <div id="coordinateResult" class="hint" aria-live="polite">النتيجة ستظهر هنا.</div>
+
+    <div class="section-title">6. إنشاء شكل من نقاط إحداثيات يدوية</div>
+    <p class="hint">أدخل إحداثيات كل نقطة بالترتيب. نقطة واحدة = نقطة، نقطتان = خط، و3 نقاط أو أكثر = مضلع مغلق. لا تخلط بين نظامي WGS84 وNZTM.</p>
+    <label for="manualCrsSelect">نظام إحداثيات النقاط</label>
+    <select id="manualCrsSelect">
+      <option value="4326">WGS84 — Longitude / Latitude (EPSG:4326)</option>
+      <option value="2193">NZTM — Easting / Northing بالمتر (EPSG:2193)</option>
+    </select>
+    <div class="row manual-coordinate-row">
+      <div>
+        <label id="manualXLabel" for="manualXInput">X / Longitude</label>
+        <input id="manualXInput" type="number" step="any" placeholder="Longitude" aria-label="X coordinate" />
+      </div>
+      <div>
+        <label id="manualYLabel" for="manualYInput">Y / Latitude</label>
+        <input id="manualYInput" type="number" step="any" placeholder="Latitude" aria-label="Y coordinate" />
+      </div>
+    </div>
+    <button id="addManualPointBtn" type="button">إضافة النقطة ورسم الشكل على الخريطة</button>
+    <button id="zoomManualShapeBtn" type="button" class="secondary" disabled>توسيط الخريطة على الشكل اليدوي</button>
+    <p class="hint">لتجنب إلغاء تحميل بلاطات الخريطة مع كل نقطة، سيتم توسيط الخريطة عند إضافة أول نقطة فقط. بعد إضافة باقي النقاط، استخدم زر «توسيط الخريطة على الشكل اليدوي» عند الحاجة.</p>
+    <div id="manualPointsList" class="manual-points-list" aria-live="polite"><span class="hint">لم تتم إضافة نقاط بعد.</span></div>
+    <div class="row">
+      <button id="undoManualPointBtn" type="button" class="secondary" disabled>حذف آخر نقطة</button>
+      <button id="clearManualPointsBtn" type="button" class="secondary" disabled>مسح النقاط والشكل</button>
+    </div>
+    <div id="manualGeometryInfo" class="coordinate-result" aria-live="polite">الشكل اليدوي سيظهر هنا بعد إدخال النقاط.</div>
+
+    </details>
+
+    <div class="section-title">7. الرسم الحر وإظهار الإحداثيات (Sketch)</div>
+    <p class="hint">استخدم Sketch لرسم نقطة أو خط أو مضلع أو مستطيل أو دائرة. بعد إكمال الرسم ستظهر إحداثيات الرؤوس بنظام WGS84 وNZTM.</p>
+    <button id="drawSketchLineBtn" type="button" class="secondary">ارسم خطًا واحسب طوله على الخريطة</button>
+    <div id="sketchCoordinates" class="coordinate-result" aria-live="polite">ابدأ الرسم من شريط Sketch على الخريطة، وستظهر الإحداثيات هنا.</div>
+    <button id="clearSketchBtn" type="button" class="secondary">مسح رسومات Sketch والإحداثيات</button>
+
+    <div class="checks">
+      <label><input id="roadsToggle" type="checkbox" checked /> الطرق</label>
+      <label><input id="parcelsToggle" type="checkbox" checked /> حدود الأراضي</label>
+      <label><input id="addressesToggle" type="checkbox" /> كل العناوين</label>
+    </div>
+    <div id="status">جاري تحميل الخدمة…</div>
+  </section>
+
+  <!-- App modules: load these in order. -->
+  <script src="./js/config.js"></script>
+  <script src="./js/utils.js"></script>
+  <script src="./js/data-service.js"></script>
+  <script src="./js/geometry-service.js"></script>
+  <script src="./js/popup-service.js"></script>
+  <script src="./js/export-service.js"></script>
+  <script src="./js/shapefile-loader.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

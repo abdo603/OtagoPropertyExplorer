@@ -1,0 +1,25 @@
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# .NET build files
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local data
+storage/saved-analyses.json
+storage/saved-analyses.json.tmp
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
